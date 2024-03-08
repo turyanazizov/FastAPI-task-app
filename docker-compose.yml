@@ -1,0 +1,50 @@
+version: '3.8'
+services:
+  mysql:
+    container_name: mysql_fastapi
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: 'fastapi'
+      MYSQL_USER: 'fastapi'
+      MYSQL_PASSWORD: 'pass1'
+      MYSQL_ROOT_PASSWORD: 'pass1'
+    ports:
+      - "3307:3306"  # Bind host port 3307 to container port 3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: fastapi
+      RABBITMQ_DEFAULT_PASS: pass1
+
+  fastapi-app:
+    container_name: fastapi_service
+    build: .
+    command: uvicorn main:app --host 0.0.0.0 --reload
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rabbitmq
+      - mysql
+    environment:
+      - AMQP_URI=amqp://fastapi:pass1@rabbitmq/%2F
+  
+  celery-worker:
+    build: .
+    command: celery -A celery_worker worker --loglevel=info
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - rabbitmq
+    environment:
+      - AMQP_URI=amqp://fastapi:pass1@rabbitmq/%2F
+
+volumes:
+  mysql-data:
